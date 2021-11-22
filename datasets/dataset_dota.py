@@ -7,22 +7,40 @@ from .DOTA_devkit.ResultMerge_multi_process import mergebypoly
 class DOTA(BaseDataset):
     def __init__(self, data_dir, phase, input_h=None, input_w=None, down_ratio=None):
         super(DOTA, self).__init__(data_dir, phase, input_h, input_w, down_ratio)
-        self.category = ['plane',
-                         'baseball-diamond',
-                         'bridge',
-                         'ground-track-field',
-                         'small-vehicle',
-                         'large-vehicle',
-                         'ship',
-                         'tennis-court',
-                         'basketball-court',
-                         'storage-tank',
-                         'soccer-ball-field',
-                         'roundabout',
-                         'harbor',
-                         'swimming-pool',
-                         'helicopter'
+        # for dota dataset: 16
+        # self.category = ['plane',
+        #                  'baseball-diamond',
+        #                  'bridge',
+        #                  'ground-track-field',
+        #                  'small-vehicle',
+        #                  'large-vehicle',
+        #                  'ship',
+        #                  'tennis-court',
+        #                  'basketball-court',
+        #                  'storage-tank',
+        #                  'soccer-ball-field',
+        #                  'roundabout',
+        #                  'harbor',
+        #                  'swimming-pool',
+        #                  'helicopter',
+        #                  'container-crane'
+        #                  ]
+        # for road marking: 13
+        self.category = ['Arr_str',
+                         'Arr_l',
+                         'Arr_r',
+                         'Arr_s_l',
+                         'Arr_s_r',
+                         'Arr_round',
+                         'Forbidden',
+                         'Diamond',
+                         'Arr_curve',
+                         'Arr_double',
+                         'Dashed_lane',
+                         'Zebra_crossing',
+                         'Stop_lane'
                          ]
+
         self.color_pans = [(204,78,210),
                            (0,192,255),
                            (0,131,0),
@@ -34,9 +52,9 @@ class DOTA(BaseDataset):
                            (204,153,255),
                            (80,208,146),
                            (0,0,204),
-                           (17,90,197),
-                           (0,255,255),
-                           (102,255,102),
+                           #(17,90,197),
+                           #(0,255,255),
+                           #(102,255,102),
                            (255,255,0)]
         self.num_classes = len(self.category)
         self.cat_ids = {cat:i for i,cat in enumerate(self.category)}
@@ -57,7 +75,7 @@ class DOTA(BaseDataset):
 
     def load_image(self, index):
         img_id = self.img_ids[index]
-        imgFile = os.path.join(self.image_path, img_id+'.png')
+        imgFile = os.path.join(self.image_path, img_id+'.jpg') # for dota is .png, for road marking is .jpg
         assert os.path.exists(imgFile), 'image {} not existed'.format(imgFile)
         img = cv2.imread(imgFile)
         return img
@@ -88,7 +106,7 @@ class DOTA(BaseDataset):
                     xmax = max(x1, x2, x3, x4)
                     ymin = max(min(y1, y2, y3, y4), 0)
                     ymax = max(y1, y2, y3, y4)
-                    if ((xmax - xmin) > 10) and ((ymax - ymin) > 10):
+                    if ((xmax - xmin) > 3) and ((ymax - ymin) > 3): # used to be 10 and 10
                         valid_pts.append([[x1,y1], [x2,y2], [x3,y3], [x4,y4]])
                         valid_cat.append(self.cat_ids[obj[8]])
                         valid_dif.append(int(obj[9]))
@@ -97,6 +115,7 @@ class DOTA(BaseDataset):
         annotation['pts'] = np.asarray(valid_pts, np.float32)
         annotation['cat'] = np.asarray(valid_cat, np.int32)
         annotation['dif'] = np.asarray(valid_dif, np.int32)
+        ## for visualization, begin
         # pts0 = np.asarray(valid_pts, np.float32)
         # img = self.load_image(index)
         # for i in range(pts0.shape[0]):
@@ -116,6 +135,7 @@ class DOTA(BaseDataset):
         # if k == ord('q'):
         #     cv2.destroyAllWindows()
         #     exit()
+        ## for visualization, end
         return annotation
 
 

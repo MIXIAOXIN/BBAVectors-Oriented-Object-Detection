@@ -152,22 +152,22 @@ class BaseDataset(data.Dataset):
 
 
     def generate_ground_truth(self, image, annotation):
+        image = np.asarray(np.clip(image, a_min=0., a_max=255.), np.float32)  # 强度限制至0~255
+        image = self.image_distort(np.asarray(image, np.float32))             # 强度纠正，包括：增强对比度、增强亮度、去躁
         image = np.asarray(np.clip(image, a_min=0., a_max=255.), np.float32)
-        image = self.image_distort(np.asarray(image, np.float32))
-        image = np.asarray(np.clip(image, a_min=0., a_max=255.), np.float32)
-        image = np.transpose(image / 255. - 0.5, (2, 0, 1))
+        image = np.transpose(image / 255. - 0.5, (2, 0, 1))                   # 将读入的BGR通道转为RGB通道
 
-        image_h = self.input_h // self.down_ratio
+        image_h = self.input_h // self.down_ratio                             # 图像降采样，向下取整
         image_w = self.input_w // self.down_ratio
 
-        hm = np.zeros((self.num_classes, image_h, image_w), dtype=np.float32)
-        wh = np.zeros((self.max_objs, 10), dtype=np.float32)
+        hm = np.zeros((self.num_classes, image_h, image_w), dtype=np.float32) # heat map的尺寸：
+        wh = np.zeros((self.max_objs, 10), dtype=np.float32)                  # oriented bounding box的回归参数矩阵： maxobjects × 10 （每个bounding box对应10个参数）
         ## add
-        cls_theta = np.zeros((self.max_objs, 1), dtype=np.float32)
+        cls_theta = np.zeros((self.max_objs, 1), dtype=np.float32)            # rotated box 与 horizontal box的分类分支，尺寸为max objects × 1
         ## add end
-        reg = np.zeros((self.max_objs, 2), dtype=np.float32)
-        ind = np.zeros((self.max_objs), dtype=np.int64)
-        reg_mask = np.zeros((self.max_objs), dtype=np.uint8)
+        reg = np.zeros((self.max_objs, 2), dtype=np.float32)                  # center point浮点数回归参数： max-objs × 2 （2表示x 或者 y）
+        ind = np.zeros((self.max_objs), dtype=np.int64)                       # ind为box的索引id，数量为500个， TODO： 后期这个参数是不是可以改小一点呢？会对整体效果有什么影响呢？
+        reg_mask = np.zeros((self.max_objs), dtype=np.uint8)                  # reg_mask 是什么呢？ 尺寸为500的无符号整数 ？？？
         num_objs = min(annotation['rect'].shape[0], self.max_objs)
         # ###################################### view Images #######################################
         # copy_image1 = cv2.resize(image, (image_w, image_h))
@@ -183,7 +183,7 @@ class BaseDataset(data.Dataset):
             ct_int = ct.astype(np.int32)
             draw_umich_gaussian(hm[annotation['cat'][k]], ct_int, radius)
             ind[k] = ct_int[1] * image_w + ct_int[0]
-            reg[k] = ct - ct_int
+            reg[k] = ct - ct_int  # offset的浮点
             reg_mask[k] = 1
             # generate wh ground_truth
             pts_4 = cv2.boxPoints(((cen_x, cen_y), (bbox_w, bbox_h), theta))  # 4 x 2

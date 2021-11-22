@@ -43,9 +43,9 @@ class OffSmoothL1Loss(nn.Module):
         super(OffSmoothL1Loss, self).__init__()
 
     def _gather_feat(self, feat, ind, mask=None):
-        dim = feat.size(2)
-        ind = ind.unsqueeze(2).expand(ind.size(0), ind.size(1), dim)
-        feat = feat.gather(1, ind)
+        dim = feat.size(2)  # 确定feature的第三维度的size
+        ind = ind.unsqueeze(2).expand(ind.size(0), ind.size(1), dim) # 先对输入ind插入第三维度，然后扩展为维度为ind（0），ind（1），dim尺寸的tensor
+        feat = feat.gather(1, ind) # gather(), 按照指定轴（第二个轴），索引下标的ind的值
         if mask is not None:
             mask = mask.unsqueeze(2).expand_as(feat)
             feat = feat[mask]
@@ -53,9 +53,12 @@ class OffSmoothL1Loss(nn.Module):
         return feat
 
     def _tranpose_and_gather_feat(self, feat, ind):
-        feat = feat.permute(0, 2, 3, 1).contiguous()
-        feat = feat.view(feat.size(0), -1, feat.size(3))
-        feat = self._gather_feat(feat, ind)
+        feat = feat.permute(0, 2, 3, 1).contiguous() # 将输出的4维tensor的维度排列转换为：batchsize × （width/stride) × (height/stride) × outchannels
+        #print('feature map size: ', feat.size())
+        feat = feat.view(feat.size(0), -1, feat.size(3)) # 将输出的tensor的维度转换为3维，batchsize × (width * height / (stride * stride)) * outchannels
+        #print('feature map size: ', feat.size())
+        feat = self._gather_feat(feat, ind)            # 取feat中索引为ind的值构成新的feat，此时的ind为选择的topK，此时topK的参数为500 ： batchsize × topK × outchannels
+        #print('feature map size: ', feat.size())
         return feat
 
     def forward(self, output, mask, ind, target):
@@ -66,9 +69,9 @@ class OffSmoothL1Loss(nn.Module):
         pred = self._tranpose_and_gather_feat(output, ind)  # torch.Size([1, 500, 2])
         if mask.sum():
             mask = mask.unsqueeze(2).expand_as(pred).bool()
-            loss = F.smooth_l1_loss(pred.masked_select(mask),
+            loss = F.smooth_l1_loss(pred.masked_select(mask),  # 按照mask的索引，取pred的子集；若输入中多一维，则说明是维度指引
                                     target.masked_select(mask),
-                                    reduction='mean')
+                                    reduction='mean')         # 计算pred和target的对应位置处的l1-loss
             return loss
         else:
             return 0.
@@ -78,10 +81,10 @@ class FocalLoss(nn.Module):
     super(FocalLoss, self).__init__()
 
   def forward(self, pred, gt):
-      pos_inds = gt.eq(1).float()
-      neg_inds = gt.lt(1).float()
+      pos_inds = gt.eq(1).float() # 比较是否等于1
+      neg_inds = gt.lt(1).float() # 判断ground truth 中的负样本的位置，即非center point的位置
 
-      neg_weights = torch.pow(1 - gt, 4)
+      neg_weights = torch.pow(1 - gt, 4) # pow为计算幂次方 （1-gt）的4次方
 
       loss = 0
 
@@ -122,11 +125,11 @@ class LossAll(torch.nn.Module):
             print('wh loss is {}'.format(wh_loss))
             print('off loss is {}'.format(off_loss))
 
-        # print(hm_loss)
+        print('hm_loss: {}, wh_loss: {}, off_loss: {}, cls_theta_loss: {} '.format(hm_loss, wh_loss, off_loss, cls_theta_loss))
         # print(wh_loss)
         # print(off_loss)
         # print(cls_theta_loss)
-        # print('-----------------')
+        print('-----------------')
 
         loss =  hm_loss + wh_loss + off_loss + cls_theta_loss
         return loss

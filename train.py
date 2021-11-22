@@ -77,7 +77,6 @@ class TrainModule(object):
         return model, optimizer, epoch
 
     def train_network(self, args):
-
         self.optimizer = torch.optim.Adam(self.model.parameters(), args.init_lr)
         self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.96, last_epoch=-1)
         save_path = 'weights_'+args.dataset
@@ -128,7 +127,7 @@ class TrainModule(object):
             print('-'*10)
             print('Epoch: {}/{} '.format(epoch, args.num_epoch))
             epoch_loss = self.run_epoch(phase='train',
-                                        data_loader=dsets_loader['train'],
+                                        data_loader=dsets_loader['train'],  # 如何计算的真值？
                                         criterion=criterion)
             train_loss.append(epoch_loss)
             self.scheduler.step(epoch)

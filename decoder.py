@@ -10,15 +10,15 @@ class DecDecoder(object):
     def _topk(self, scores):
         batch, cat, height, width = scores.size()
 
-        topk_scores, topk_inds = torch.topk(scores.view(batch, cat, -1), self.K)
+        topk_scores, topk_inds = torch.topk(scores.view(batch, cat, -1), self.K) # 输出scores， 对应的index的3维矩阵： batch × 类别数量 × 特征图的size
 
-        topk_inds = topk_inds % (height * width)
-        topk_ys = (topk_inds // width).int().float()
-        topk_xs = (topk_inds % width).int().float()
+        topk_inds = topk_inds % (height * width) # 定位topk的位置
+        topk_ys = (topk_inds // width).int().float() # 定位topk的y坐标
+        topk_xs = (topk_inds % width).int().float()  # 定位topk的x坐标
 
-        topk_score, topk_ind = torch.topk(topk_scores.view(batch, -1), self.K)
-        topk_clses = (topk_ind // self.K).int()
-        topk_inds = self._gather_feat( topk_inds.view(batch, -1, 1), topk_ind).view(batch, self.K)
+        topk_score, topk_ind = torch.topk(topk_scores.view(batch, -1), self.K)  # 2维矩阵： batch × （类别数量 × 特征图size），并选出topk个位置id
+        topk_clses = (topk_ind // self.K).int()   # 双斜杠// 表示地板除，先做除法，再向下取整
+        topk_inds = self._gather_feat(topk_inds.view(batch, -1, 1), topk_ind).view(batch, self.K)
         topk_ys = self._gather_feat(topk_ys.view(batch, -1, 1), topk_ind).view(batch, self.K)
         topk_xs = self._gather_feat(topk_xs.view(batch, -1, 1), topk_ind).view(batch, self.K)
 
