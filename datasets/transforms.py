@@ -75,7 +75,7 @@ def load_affine_matrix(crop_center, crop_size, dst_size, inverse=False, rotation
     else:
         M = cv2.getAffineTransform(src, dst)
     return M
-
+# 计算hbb的iou
 def ex_box_jaccard(a, b):
     a = np.asarray(a, np.float32)
     b = np.asarray(b, np.float32)

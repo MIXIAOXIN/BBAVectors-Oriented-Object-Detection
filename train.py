@@ -12,7 +12,10 @@ def collater(data):
     for name in data[0]:
         out_data_dict[name] = []
     for sample in data:
+        #print('this sample: ', sample)
         for name in sample:
+            # print('this name is:', name)
+            # print('name sample value: ', torch.from_numpy(sample[name]))
             out_data_dict[name].append(torch.from_numpy(sample[name]))
     for name in out_data_dict:
         out_data_dict[name] = torch.stack(out_data_dict[name], dim=0)
@@ -110,11 +113,17 @@ class TrainModule(object):
                                    input_w=args.input_w,
                                    down_ratio=self.down_ratio)
                  for x in self.dataset_phase[args.dataset]}
+        # add weighted sampler by mixiaoxin
+        class_count = [853.0, 547.0, 161.0, 158.0, 464.0, 17.0, 22.0, 38.0, 20.0, 2.0, 9369, 9131, 550.0]
+        weights = [1.0 / i for i in class_count]
+        print("sample weights: ", weights)
+        sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, num_samples=13, replacement=True)
 
         dsets_loader = {}
         dsets_loader['train'] = torch.utils.data.DataLoader(dsets['train'],
                                                            batch_size=args.batch_size,
                                                            shuffle=True,
+                                                           #sampler = sampler,
                                                            num_workers=args.num_workers,
                                                            pin_memory=True,
                                                            drop_last=True,

@@ -67,7 +67,7 @@ class BaseDataset(data.Dataset):
         crop_size = None
         crop_center = None
         crop_size, crop_center = random_crop_info(h=image.shape[0], w=image.shape[1])
-        image, annotation['pts'], crop_center = random_flip(image, annotation['pts'], crop_center)
+        #image, annotation['pts'], crop_center = random_flip(image, annotation['pts'], crop_center)  # 对于标志标线，不应该有flip类型的对称翻转
         if crop_center is None:
             crop_center = np.asarray([float(image.shape[1])/2, float(image.shape[0])/2], dtype=np.float32)
         if crop_size is None:
@@ -77,18 +77,21 @@ class BaseDataset(data.Dataset):
                                dst_size=(self.input_w, self.input_h),
                                inverse=False,
                                rotation=True)
-        image = cv2.warpAffine(src=image, M=M, dsize=(self.input_w, self.input_h), flags=cv2.INTER_LINEAR)
-        if annotation['pts'].shape[0]:
-            annotation['pts'] = np.concatenate([annotation['pts'], np.ones((annotation['pts'].shape[0], annotation['pts'].shape[1], 1))], axis=2)
-            annotation['pts'] = np.matmul(annotation['pts'], np.transpose(M))
+        image = cv2.warpAffine(src=image, M=M, dsize=(self.input_w, self.input_h), flags=cv2.INTER_LINEAR) # 实现图像的平移、旋转
+        if annotation['pts'].shape[0]:  # 4 个 线程，一次load4张image，并对图像裁剪等放射变换
+            #print('annotation pts size 1: ', annotation['pts'].shape)
+            annotation['pts'] = np.concatenate([annotation['pts'], np.ones((annotation['pts'].shape[0], annotation['pts'].shape[1], 1))], axis=2)  # 扩充一位，以便下方的矩阵运算
+            #print('annotation pts size 2: ', annotation['pts'].shape)
+            annotation['pts'] = np.matmul(annotation['pts'], np.transpose(M))   # 平移、旋转变换
+            #print('annotation pts size 3: ', annotation['pts'].shape)
             annotation['pts'] = np.asarray(annotation['pts'], np.float32)
 
         out_annotations = {}
-        size_thresh = 3
+        size_thresh = 2
         out_rects = []
         out_cat = []
         for pt_old, cat in zip(annotation['pts'] , annotation['cat']):
-            if (pt_old<0).any() or (pt_old[:,0]>self.input_w-1).any() or (pt_old[:,1]>self.input_h-1).any():
+            if (pt_old<0).any() or (pt_old[:,0]>self.input_w-1).any() or (pt_old[:,1]>self.input_h-1).any(): # 若变换后的图像超出预定义尺寸
                 pt_new = pt_old.copy()
                 pt_new[:,0] = np.minimum(np.maximum(pt_new[:,0], 0.), self.input_w - 1)
                 pt_new[:,1] = np.minimum(np.maximum(pt_new[:,1], 0.), self.input_h - 1)
