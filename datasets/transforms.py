@@ -1,6 +1,8 @@
 import numpy as np
 import cv2
 
+from .grid import Grid
+
 def random_flip(image, gt_pts, crop_center=None):
     # image: h x w x c
     # gt_pts: num_obj x 4 x 2
@@ -18,6 +20,14 @@ def random_flip(image, gt_pts, crop_center=None):
         if crop_center is not None:
             crop_center[1] = h-1 - crop_center[1]
     return image, gt_pts, crop_center
+
+# add by mixiaoxin
+def random_grid_erase(image, gt_pts, use_h = True, use_w = True, rotate = 1, offset=False, ratio = 0.5, mode=0, prob = 1.):
+    erase_ratio = 0.1
+    erase_prob = 0.45
+    grid_erase = Grid(use_h, use_w, rotate, offset, erase_ratio, mode, erase_prob)
+    image, gt_pts = grid_erase(image, gt_pts)
+    return image, gt_pts
 
 
 def _get_border(size, border):

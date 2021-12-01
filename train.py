@@ -86,7 +86,7 @@ class TrainModule(object):
         start_epoch = 1
         
         # add resume part for continuing training when break previously, 10-16-2020
-        if args.resume_train:
+        if args.resume:
             self.model, self.optimizer, start_epoch = self.load_model(self.model, 
                                                                         self.optimizer, 
                                                                         args.resume_train, 

@@ -112,6 +112,7 @@ class LossAll(torch.nn.Module):
         self.L_wh =  OffSmoothL1Loss()
         self.L_off = OffSmoothL1Loss()
         self.L_cls_theta = BCELoss()
+        self.L_forward_dir = BCELoss()
 
     def forward(self, pr_decs, gt_batch):
         hm_loss  = self.L_hm(pr_decs['hm'], gt_batch['hm'])
@@ -119,17 +120,21 @@ class LossAll(torch.nn.Module):
         off_loss = self.L_off(pr_decs['reg'], gt_batch['reg_mask'], gt_batch['ind'], gt_batch['reg'])
         ## add
         cls_theta_loss = self.L_cls_theta(pr_decs['cls_theta'], gt_batch['reg_mask'], gt_batch['ind'], gt_batch['cls_theta'])
+        ## add forward prediction by mixiaoxin
+        forward_dir_loss = self.L_forward_dir(pr_decs['forward'], gt_batch['reg_mask'], gt_batch['ind'], gt_batch['forward'])
 
         if isnan(hm_loss) or isnan(wh_loss) or isnan(off_loss):
             print('hm loss is {}'.format(hm_loss))
             print('wh loss is {}'.format(wh_loss))
             print('off loss is {}'.format(off_loss))
+            print('cls_theta_loss is {}'.format(cls_theta_loss))
+            print('forward direction loss is {}'.format(forward_dir_loss))
 
-        print('hm_loss: {}, wh_loss: {}, off_loss: {}, cls_theta_loss: {} '.format(hm_loss, wh_loss, off_loss, cls_theta_loss))
+        print('hm_loss: {}, wh_loss: {}, off_loss: {}, cls_theta_loss: {}, forward_direction_loss '.format(hm_loss, wh_loss, off_loss, cls_theta_loss, forward_dir_loss))
         # print(wh_loss)
         # print(off_loss)
         # print(cls_theta_loss)
         print('-----------------')
 
-        loss =  hm_loss + wh_loss + off_loss + cls_theta_loss
+        loss =  hm_loss + wh_loss + off_loss + cls_theta_loss + forward_dir_loss
         return loss

@@ -11,7 +11,7 @@ import os
 
 def parse_args():
     parser = argparse.ArgumentParser(description='BBAVectors Implementation')
-    parser.add_argument('--num_epoch', type=int, default=80, help='Number of epochs') # used to be 80
+    parser.add_argument('--num_epoch', type=int, default=100, help='Number of epochs') # used to be 80
     parser.add_argument('--batch_size', type=int, default=2, help='Number of batch size')
     parser.add_argument('--num_workers', type=int, default=4, help='Number of workers')
     parser.add_argument('--init_lr', type=float, default=1.25e-5, help='Initial learning rate') # used to be 1.25e-4
@@ -20,7 +20,7 @@ def parse_args():
     parser.add_argument('--K', type=int, default=500, help='Maximum of objects')
     parser.add_argument('--conf_thresh', type=float, default=0.15, help='Confidence threshold, 0.1 for general evaluation') # for train=0.18
     parser.add_argument('--ngpus', type=int, default=2, help='Number of gpus, ngpus>1 for multigpu')
-    parser.add_argument('--resume_train', type=str, default='weights_dota/model_last.pth', help='Weights resumed in training')
+    parser.add_argument('--resume_train', type=str, default='', help='Weights resumed in training')
     parser.add_argument('--resume', type=str, default='model_last.pth', help='Weights resumed in testing and evaluation')
     parser.add_argument('--dataset', type=str, default='dota', help='Name of dataset')
     parser.add_argument('--data_dir', type=str, default='./data_dir_roadmarking', help='Data directory')
@@ -36,7 +36,8 @@ if __name__ == '__main__':
     heads = {'hm': num_classes[args.dataset],
              'wh': 10,
              'reg': 2,
-             'cls_theta': 1
+             'cls_theta': 1,
+             'forward': 1  # add by mixiaoxin to predict the forward direction
              }
     down_ratio = 4
     model = ctrbox_net.CTRBOX(heads=heads,

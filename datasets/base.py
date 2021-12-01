@@ -4,7 +4,7 @@ import torch
 import numpy as np
 import math
 from .draw_gaussian import draw_umich_gaussian, gaussian_radius
-from .transforms import random_flip, load_affine_matrix, random_crop_info, ex_box_jaccard
+from .transforms import random_flip, load_affine_matrix, random_crop_info, ex_box_jaccard, random_grid_erase
 from . import data_augment
 
 class BaseDataset(data.Dataset):
@@ -68,6 +68,8 @@ class BaseDataset(data.Dataset):
         crop_center = None
         crop_size, crop_center = random_crop_info(h=image.shape[0], w=image.shape[1])
         #image, annotation['pts'], crop_center = random_flip(image, annotation['pts'], crop_center)  # 对于标志标线，不应该有flip类型的对称翻转
+        image, annotation['pts'] = random_grid_erase(image, annotation['pts'])    # grid erase
+
         if crop_center is None:
             crop_center = np.asarray([float(image.shape[1])/2, float(image.shape[0])/2], dtype=np.float32)
         if crop_size is None:
@@ -97,12 +99,15 @@ class BaseDataset(data.Dataset):
                 pt_new[:,1] = np.minimum(np.maximum(pt_new[:,1], 0.), self.input_h - 1)
                 iou = ex_box_jaccard(pt_old.copy(), pt_new.copy())
                 if iou>0.6:
-                    rect = cv2.minAreaRect(pt_new/self.down_ratio)
+                    #rect = cv2.minAreaRect(pt_new/self.down_ratio)  # 这个函数计算出来后第一个点的标注信息就被抹去了
+                    # TODO：： change the rect annotation as 4 vertexes but width 、 height 、angle
+                    rect = pt_new / self.down_ratio    # change by mixiaoxin
                     if rect[1][0]>size_thresh and rect[1][1]>size_thresh:
                         out_rects.append([rect[0][0], rect[0][1], rect[1][0], rect[1][1], rect[2]])
                         out_cat.append(cat)
             else:
-                rect = cv2.minAreaRect(pt_old/self.down_ratio)
+                #rect = cv2.minAreaRect(pt_old/self.down_ratio)
+                rect = pt_old / self.down_ratio        # change by mixiaoxin
                 if rect[1][0]<size_thresh and rect[1][1]<size_thresh:
                     continue
                 out_rects.append([rect[0][0], rect[0][1], rect[1][0], rect[1][1], rect[2]])
@@ -158,6 +163,9 @@ class BaseDataset(data.Dataset):
         image = np.asarray(np.clip(image, a_min=0., a_max=255.), np.float32)  # 强度限制至0~255
         image = self.image_distort(np.asarray(image, np.float32))             # 强度纠正，包括：增强对比度、增强亮度、去躁
         image = np.asarray(np.clip(image, a_min=0., a_max=255.), np.float32)
+        # ###################################### view Images #######################################
+        #image_source = image.copy()
+        # ##########################################################################################
         image = np.transpose(image / 255. - 0.5, (2, 0, 1))                   # 将读入的BGR通道转为RGB通道
 
         image_h = self.input_h // self.down_ratio                             # 图像降采样，向下取整
@@ -168,16 +176,21 @@ class BaseDataset(data.Dataset):
         ## add
         cls_theta = np.zeros((self.max_objs, 1), dtype=np.float32)            # rotated box 与 horizontal box的分类分支，尺寸为max objects × 1
         ## add end
+        ## add forward direction mixiaoxin
+        forward = np.zeros((self.max_objs, 1), dtype=np.float32)              # forward 方向的分类分支，尺寸为max objects × 1，朝向v轴正方向为1，否则为0
+        ## add end
         reg = np.zeros((self.max_objs, 2), dtype=np.float32)                  # center point浮点数回归参数： max-objs × 2 （2表示x 或者 y）
         ind = np.zeros((self.max_objs), dtype=np.int64)                       # ind为box的索引id，数量为500个， TODO： 后期这个参数是不是可以改小一点呢？会对整体效果有什么影响呢？
         reg_mask = np.zeros((self.max_objs), dtype=np.uint8)                  # reg_mask 是什么呢？ 尺寸为500的无符号整数 ？？？
         num_objs = min(annotation['rect'].shape[0], self.max_objs)
         # ###################################### view Images #######################################
-        # copy_image1 = cv2.resize(image, (image_w, image_h))
+        # print('image: ', image.shape)
+        # copy_image1 = cv2.resize(image_source, (image_w, image_h))
         # copy_image2 = copy_image1.copy()
         # ##########################################################################################
         for k in range(num_objs):
             rect = annotation['rect'][k, :]
+            # TODO： reorgonize the center and bbox annotation accoring to the new rect style by mixiaoxin
             cen_x, cen_y, bbox_w, bbox_h, theta = rect
             # print(theta)
             radius = gaussian_radius((math.ceil(bbox_h), math.ceil(bbox_w)))
@@ -210,20 +223,20 @@ class BaseDataset(data.Dataset):
             wh[k, 6:8] = ll - ct
             #####################################################################################
             # # draw
-            # cv2.line(copy_image1, (cen_x, cen_y), (int(tt[0]), int(tt[1])), (0, 0, 255), 1, 1)
-            # cv2.line(copy_image1, (cen_x, cen_y), (int(rr[0]), int(rr[1])), (255, 0, 255), 1, 1)
-            # cv2.line(copy_image1, (cen_x, cen_y), (int(bb[0]), int(bb[1])), (0, 255, 255), 1, 1)
-            # cv2.line(copy_image1, (cen_x, cen_y), (int(ll[0]), int(ll[1])), (255, 0, 0), 1, 1)
-            #####################################################################################
+            # cv2.line(copy_image1, (int(cen_x), int(cen_y)), (int(tt[0]), int(tt[1])), (0, 0, 255), 1, 1)
+            # cv2.line(copy_image1, (int(cen_x), int(cen_y)), (int(rr[0]), int(rr[1])), (255, 0, 255), 1, 1)
+            # cv2.line(copy_image1, (int(cen_x), int(cen_y)), (int(bb[0]), int(bb[1])), (0, 255, 255), 1, 1)
+            # cv2.line(copy_image1, (int(cen_x), int(cen_y)), (int(ll[0]), int(ll[1])), (255, 0, 0), 1, 1)
+            ####################################################################################
             # horizontal channel
             w_hbbox, h_hbbox = self.cal_bbox_wh(pts_4)
             wh[k, 8:10] = 1. * w_hbbox, 1. * h_hbbox
             #####################################################################################
             # # draw
-            # cv2.line(copy_image2, (cen_x, cen_y), (int(cen_x), int(cen_y-wh[k, 9]/2)), (0, 0, 255), 1, 1)
-            # cv2.line(copy_image2, (cen_x, cen_y), (int(cen_x+wh[k, 8]/2), int(cen_y)), (255, 0, 255), 1, 1)
-            # cv2.line(copy_image2, (cen_x, cen_y), (int(cen_x), int(cen_y+wh[k, 9]/2)), (0, 255, 255), 1, 1)
-            # cv2.line(copy_image2, (cen_x, cen_y), (int(cen_x-wh[k, 8]/2), int(cen_y)), (255, 0, 0), 1, 1)
+            # cv2.line(copy_image2, (int(cen_x), int(cen_y)), (int(cen_x), int(cen_y-wh[k, 9]/2)), (0, 0, 255), 1, 1)
+            # cv2.line(copy_image2, (int(cen_x), int(cen_y)), (int(cen_x+wh[k, 8]/2), int(cen_y)), (255, 0, 255), 1, 1)
+            # cv2.line(copy_image2, (int(cen_x), int(cen_y)), (int(cen_x), int(cen_y+wh[k, 9]/2)), (0, 255, 255), 1, 1)
+            # cv2.line(copy_image2, (int(cen_x), int(cen_y)), (int(cen_x-wh[k, 8]/2), int(cen_y)), (255, 0, 0), 1, 1)
             #####################################################################################
             # v0
             # if abs(theta)>3 and abs(theta)<90-3:
@@ -232,9 +245,11 @@ class BaseDataset(data.Dataset):
             jaccard_score = ex_box_jaccard(pts_4.copy(), self.cal_bbox_pts(pts_4).copy())
             if jaccard_score<0.95:
                 cls_theta[k, 0] = 1
+
+
         # ###################################### view Images #####################################
-        # # hm_show = np.uint8(cv2.applyColorMap(np.uint8(hm[0, :, :] * 255), cv2.COLORMAP_JET))
-        # # copy_image = cv2.addWeighted(np.uint8(copy_image), 0.4, hm_show, 0.8, 0)
+        # hm_show = np.uint8(cv2.applyColorMap(np.uint8(hm[0, :, :] * 255), cv2.COLORMAP_JET))
+        # copy_image = cv2.addWeighted(np.uint8(copy_image2), 0.4, hm_show, 0.8, 0)
         #     if jaccard_score>0.95:
         #         print(theta, jaccard_score, cls_theta[k, 0])
         #         cv2.imshow('img1', cv2.resize(np.uint8(copy_image1), (image_w*4, image_h*4)))

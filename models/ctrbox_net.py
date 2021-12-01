@@ -56,6 +56,6 @@ class CTRBOX(nn.Module):
         dec_dict = {}
         for head in self.heads:
             dec_dict[head] = self.__getattr__(head)(c2_combine)
-            if 'hm' in head or 'cls' in head:
+            if 'hm' in head or 'cls' in head or 'forward' in head:  # forward prediction by mixiaoxin, which is the binary classification problem
                 dec_dict[head] = torch.sigmoid(dec_dict[head])
         return dec_dict

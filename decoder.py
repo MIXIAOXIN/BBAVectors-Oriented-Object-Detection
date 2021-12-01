@@ -51,12 +51,13 @@ class DecDecoder(object):
         wh = pr_decs['wh']
         reg = pr_decs['reg']
         cls_theta = pr_decs['cls_theta']
+        forward_dir = pr_decs['forward']
 
         batch, c, height, width = heat.size()
-        heat = self._nms(heat)
+        heat = self._nms(heat)    # 对heat map做nms
 
-        scores, inds, clses, ys, xs = self._topk(heat)
-        reg = self._tranpose_and_gather_feat(reg, inds)
+        scores, inds, clses, ys, xs = self._topk(heat)  # 对heat map取出topK，此时得出topK的得分、索引、类别、center坐标
+        reg = self._tranpose_and_gather_feat(reg, inds)  # 得到每个位置上的回归特征
         reg = reg.view(batch, self.K, 2)
         xs = xs.view(batch, self.K, 1) + reg[:, :, 0:1]
         ys = ys.view(batch, self.K, 1) + reg[:, :, 1:2]
@@ -68,6 +69,11 @@ class DecDecoder(object):
         cls_theta = self._tranpose_and_gather_feat(cls_theta, inds)
         cls_theta = cls_theta.view(batch, self.K, 1)
         mask = (cls_theta>0.8).float().view(batch, self.K, 1)
+        #
+        # add by mixiaoxin
+        forward_dir = self._tranpose_and_gather_feat(forward_dir, inds)
+        forward_dir = forward_dir.view(batch, self.K, 1)
+        #forward_dir_mask = (forward_dir > 0.5).float().view(batch, self.K, 1)
         #
         tt_x = (xs+wh[..., 0:1])*mask + (xs)*(1.-mask)
         tt_y = (ys+wh[..., 1:2])*mask + (ys-wh[..., 9:10]/2)*(1.-mask)
@@ -89,7 +95,8 @@ class DecDecoder(object):
                                 ll_x,
                                 ll_y,
                                 scores,
-                                clses],
+                                clses,
+                                forward_dir], # forward_dir is added by mixiaoxin
                                dim=2)
 
         index = (scores>self.conf_thresh).squeeze(0).squeeze(1)
