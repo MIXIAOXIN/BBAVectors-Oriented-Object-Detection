@@ -26,19 +26,19 @@ class DOTA(BaseDataset):
         #                  'container-crane'
         #                  ]
         # for road marking: 13
-        self.category = ['Arr_str',
-                         'Arr_l',
-                         'Arr_r',
-                         'Arr_s_l',
-                         'Arr_s_r',
-                         'Arr_round',
-                         'Forbidden',
-                         'Diamond',
-                         'Arr_curve',
-                         'Arr_double',
-                         'Dashed_lane',
-                         'Zebra_crossing',
-                         'Stop_lane'
+        self.category = ['Arr_str',   # 0
+                         'Arr_l',     # 1
+                         'Arr_r',      # 2
+                         'Arr_s_l',     # 3
+                         'Arr_s_r',      # 4
+                         'Arr_round',     # 5
+                         'Forbidden',      # 6
+                         'Diamond',       # 7
+                         'Arr_curve',      # 8
+                         'Arr_double',      # 9
+                         'Dashed_lane',     # 10
+                         'Zebra_crossing',    # 11
+                         'Stop_lane'          # 12
                          ]
 
         self.color_pans = [(204,78,210),
@@ -115,7 +115,6 @@ class DOTA(BaseDataset):
         annotation['pts'] = np.asarray(valid_pts, np.float32)
         annotation['cat'] = np.asarray(valid_cat, np.int32)
         annotation['dif'] = np.asarray(valid_dif, np.int32)
-        ## for visualization, begin
         # pts0 = np.asarray(valid_pts, np.float32)
         # img = self.load_image(index)
         # for i in range(pts0.shape[0]):

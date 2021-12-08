@@ -1,3 +1,5 @@
+import numpy as np
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -121,7 +123,7 @@ class LossAll(torch.nn.Module):
         ## add
         cls_theta_loss = self.L_cls_theta(pr_decs['cls_theta'], gt_batch['reg_mask'], gt_batch['ind'], gt_batch['cls_theta'])
         ## add forward prediction by mixiaoxin
-        forward_dir_loss = self.L_forward_dir(pr_decs['forward'], gt_batch['reg_mask'], gt_batch['ind'], gt_batch['forward'])
+        forward_dir_loss = self.L_forward_dir(pr_decs['forward'], gt_batch['forward_mask'], gt_batch['ind'], gt_batch['forward'])
 
         if isnan(hm_loss) or isnan(wh_loss) or isnan(off_loss):
             print('hm loss is {}'.format(hm_loss))
@@ -130,7 +132,9 @@ class LossAll(torch.nn.Module):
             print('cls_theta_loss is {}'.format(cls_theta_loss))
             print('forward direction loss is {}'.format(forward_dir_loss))
 
-        print('hm_loss: {}, wh_loss: {}, off_loss: {}, cls_theta_loss: {}, forward_direction_loss '.format(hm_loss, wh_loss, off_loss, cls_theta_loss, forward_dir_loss))
+        print('hm_loss: {}, wh_loss: {}, off_loss: {}, cls_theta_loss: {}, forward_direction_loss：{} '.format(hm_loss, wh_loss, off_loss, cls_theta_loss, forward_dir_loss))
+        loss_detail = [hm_loss, wh_loss, off_loss, cls_theta_loss, forward_dir_loss]
+        np.savetxt("train_loss_detail.txt", loss_detail, delimiter=',', fmt='%.6f')
         # print(wh_loss)
         # print(off_loss)
         # print(cls_theta_loss)

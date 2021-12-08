@@ -15,4 +15,7 @@ models/__pycache__/
 pretrain-model/
 result_dota-test-data/
 test_data_dir
+Testresult_dota
+*.jpg
+
 

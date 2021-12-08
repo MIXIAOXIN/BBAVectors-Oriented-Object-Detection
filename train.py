@@ -86,7 +86,7 @@ class TrainModule(object):
         start_epoch = 1
         
         # add resume part for continuing training when break previously, 10-16-2020
-        if args.resume:
+        if args.resume_train:
             self.model, self.optimizer, start_epoch = self.load_model(self.model, 
                                                                         self.optimizer, 
                                                                         args.resume_train, 
@@ -113,11 +113,13 @@ class TrainModule(object):
                                    input_w=args.input_w,
                                    down_ratio=self.down_ratio)
                  for x in self.dataset_phase[args.dataset]}
+        ################################################################################################################
         # add weighted sampler by mixiaoxin
-        class_count = [853.0, 547.0, 161.0, 158.0, 464.0, 17.0, 22.0, 38.0, 20.0, 2.0, 9369, 9131, 550.0]
-        weights = [1.0 / i for i in class_count]
-        print("sample weights: ", weights)
-        sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, num_samples=13, replacement=True)
+        #class_count = [853.0, 547.0, 161.0, 158.0, 464.0, 17.0, 22.0, 38.0, 20.0, 2.0, 9369, 9131, 550.0]
+        #weights = [1.0 / i for i in class_count]
+        #print("sample weights: ", weights)
+        #sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, num_samples=13, replacement=True)
+        ################################################################################################################
 
         dsets_loader = {}
         dsets_loader['train'] = torch.utils.data.DataLoader(dsets['train'],
@@ -143,7 +145,7 @@ class TrainModule(object):
 
             np.savetxt(os.path.join(save_path, 'train_loss.txt'), train_loss, fmt='%.6f')
 
-            if epoch % 5 == 0 or epoch > 20:
+            if epoch % 5 == 0 or epoch > 15:
                 self.save_model(os.path.join(save_path, 'model_{}.pth'.format(epoch)),
                                 epoch,
                                 self.model,

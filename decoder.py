@@ -51,7 +51,7 @@ class DecDecoder(object):
         wh = pr_decs['wh']
         reg = pr_decs['reg']
         cls_theta = pr_decs['cls_theta']
-        forward_dir = pr_decs['forward']
+        forward_orientation = pr_decs['forward']
 
         batch, c, height, width = heat.size()
         heat = self._nms(heat)    # 对heat map做nms
@@ -69,10 +69,11 @@ class DecDecoder(object):
         cls_theta = self._tranpose_and_gather_feat(cls_theta, inds)
         cls_theta = cls_theta.view(batch, self.K, 1)
         mask = (cls_theta>0.8).float().view(batch, self.K, 1)
+        #print("obb mask is: {}".format(mask))
         #
         # add by mixiaoxin
-        forward_dir = self._tranpose_and_gather_feat(forward_dir, inds)
-        forward_dir = forward_dir.view(batch, self.K, 1)
+        forward_orientation = self._tranpose_and_gather_feat(forward_orientation, inds)
+        forward_orientation = forward_orientation.view(batch, self.K, 1)
         #forward_dir_mask = (forward_dir > 0.5).float().view(batch, self.K, 1)
         #
         tt_x = (xs+wh[..., 0:1])*mask + (xs)*(1.-mask)
@@ -96,7 +97,7 @@ class DecDecoder(object):
                                 ll_y,
                                 scores,
                                 clses,
-                                forward_dir], # forward_dir is added by mixiaoxin
+                                forward_orientation], # forward_dir is added by mixiaoxin
                                dim=2)
 
         index = (scores>self.conf_thresh).squeeze(0).squeeze(1)

@@ -11,6 +11,7 @@ def decode_prediction(predictions, dsets, args, img_id, down_ratio):
 
     pts0 = {cat: [] for cat in dsets.category}
     scores0 = {cat: [] for cat in dsets.category}
+    forward_orient0 = {cat: [] for cat in dsets.category}
     for pred in predictions:
         cen_pt = np.asarray([pred[0], pred[1]], np.float32)
         tt = np.asarray([pred[2], pred[3]], np.float32)
@@ -23,15 +24,19 @@ def decode_prediction(predictions, dsets, args, img_id, down_ratio):
         br = bb + rr - cen_pt
         score = pred[10]
         clse = pred[11]
-        pts = np.asarray([tr, br, bl, tl], np.float32)
+        forward_orient = pred[12]
+        #print("prediction center_pt: {}; ll : {}; tt : {}; rr: {}; bb : {}".format(cen_pt, ll, tt, rr, bb))
+        #pts = np.asarray([tr, br, bl, tl], np.float32)
+        pts = np.asarray([tl, tr, br, bl], np.float32)  # change by mixiaoxin
         pts[:, 0] = pts[:, 0] * down_ratio / args.input_w * w
         pts[:, 1] = pts[:, 1] * down_ratio / args.input_h * h
         pts0[dsets.category[int(clse)]].append(pts)
         scores0[dsets.category[int(clse)]].append(score)
-    return pts0, scores0
+        forward_orient0[dsets.category[int(clse)]].append(forward_orient)
+    return pts0, scores0, forward_orient0
 
 
-def non_maximum_suppression(pts, scores):
+def non_maximum_suppression(pts, scores, orients=None):
     nms_item = np.concatenate([pts[:, 0:1, 0],
                                pts[:, 0:1, 1],
                                pts[:, 1:2, 0],
@@ -43,7 +48,17 @@ def non_maximum_suppression(pts, scores):
                                scores[:, np.newaxis]], axis=1)
     nms_item = np.asarray(nms_item, np.float64)
     keep_index = py_cpu_nms_poly_fast(dets=nms_item, thresh=0.1)
-    return nms_item[keep_index]
+    nms_item2 = np.concatenate([pts[:, 0:1, 0],
+                               pts[:, 0:1, 1],
+                               pts[:, 1:2, 0],
+                               pts[:, 1:2, 1],
+                               pts[:, 2:3, 0],
+                               pts[:, 2:3, 1],
+                               pts[:, 3:4, 0],
+                               pts[:, 3:4, 1],
+                               scores[:, np.newaxis],
+                                orients[:, np.newaxis]], axis=1)
+    return nms_item2[keep_index]
 
 
 def write_results(args,
@@ -68,11 +83,14 @@ def write_results(args,
 
         decoded_pts = []
         decoded_scores = []
+        decoded_orients = []
         torch.cuda.synchronize(device)
         predictions = decoder.ctdet_decode(pr_decs)
-        pts0, scores0 = decode_prediction(predictions, dsets, args, img_id, down_ratio)
+        #pts0, scores0 = decode_prediction(predictions, dsets, args, img_id, down_ratio)
+        pts0, scores0, orient0 = decode_prediction(predictions, dsets, args, img_id, down_ratio)
         decoded_pts.append(pts0)
         decoded_scores.append(scores0)
+        decoded_orients.append(orient0)
 
         # nms
         for cat in dsets.category:

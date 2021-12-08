@@ -77,6 +77,9 @@ class TestModule(object):
 
 
     def test(self, args, down_ratio):
+        result_path = 'Testresult_' + args.dataset
+        if not os.path.exists(result_path):
+            os.mkdir(result_path)
         save_path = 'weights_'+args.dataset
         self.model = self.load_model(self.model, os.path.join(save_path, args.resume))
         self.model = self.model.to(self.device)
@@ -108,10 +111,12 @@ class TestModule(object):
             torch.cuda.synchronize(self.device)
             decoded_pts = []
             decoded_scores = []
+            decoded_orients = []
             predictions = self.decoder.ctdet_decode(pr_decs)
-            pts0, scores0 = func_utils.decode_prediction(predictions, dsets, args, img_id, down_ratio)
+            pts0, scores0, orients0 = func_utils.decode_prediction(predictions, dsets, args, img_id, down_ratio)
             decoded_pts.append(pts0)
             decoded_scores.append(scores0)
+            decoded_orients.append(orients0)
             #nms
             results = {cat:[] for cat in dsets.category}
             for cat in dsets.category:
@@ -119,13 +124,16 @@ class TestModule(object):
                     continue
                 pts_cat = []
                 scores_cat = []
-                for pts0, scores0 in zip(decoded_pts, decoded_scores):
+                orients_cat = []
+                for pts0, scores0, orients0 in zip(decoded_pts, decoded_scores, decoded_orients):
                     pts_cat.extend(pts0[cat])
                     scores_cat.extend(scores0[cat])
+                    orients_cat.extend(orients0[cat])
                 pts_cat = np.asarray(pts_cat, np.float32)
                 scores_cat = np.asarray(scores_cat, np.float32)
+                orients_cat = np.array(orients_cat, np.float32)
                 if pts_cat.shape[0]:
-                    nms_results = func_utils.non_maximum_suppression(pts_cat, scores_cat)
+                    nms_results = func_utils.non_maximum_suppression(pts_cat, scores_cat, orients_cat)
                     results[cat].extend(nms_results)
 
             end_time = time.time()
@@ -142,7 +150,8 @@ class TestModule(object):
                     continue
                 result = results[cat]
                 for pred in result:
-                    score = pred[-1]
+                    score = pred[-2]
+                    orient = pred[-1]
                     tl = np.asarray([pred[0], pred[1]], np.float32)
                     tr = np.asarray([pred[2], pred[3]], np.float32)
                     br = np.asarray([pred[4], pred[5]], np.float32)
@@ -160,6 +169,13 @@ class TestModule(object):
                     cv2.line(ori_image, (int(cen_pts[0]), int(cen_pts[1])), (int(bb[0]), int(bb[1])), (0,255,0),1,1)
                     cv2.line(ori_image, (int(cen_pts[0]), int(cen_pts[1])), (int(ll[0]), int(ll[1])), (255,0,0),1,1)
 
+                    # draw forward direction
+                    if(orient > 0.5):  # v 轴正方向
+                        cv2.circle(ori_image, (int(bb[0]), int(bb[1])), 2, (255, 255, 0), 4)
+                    else:              # v 轴负方向
+                        cv2.circle(ori_image, (int(tt[0]), int(tt[1])), 2, (255, 255, 0), 4)
+
+
                     # cv2.line(ori_image, (int(cen_pts[0]), int(cen_pts[1])), (int(tl[0]), int(tl[1])), (0,0,255),1,1)
                     # cv2.line(ori_image, (int(cen_pts[0]), int(cen_pts[1])), (int(tr[0]), int(tr[1])), (255,0,255),1,1)
                     # cv2.line(ori_image, (int(cen_pts[0]), int(cen_pts[1])), (int(br[0]), int(br[1])), (0,255,0),1,1)
@@ -170,6 +186,7 @@ class TestModule(object):
                     #print('cate is: ', cat)
                     cv2.putText(ori_image, '{:.2f} {}'.format(score, cat), ((int)(box[1][0]), (int)(box[1][1])),
                                 cv2.FONT_HERSHEY_COMPLEX, 0.5, (0,255,255), 1, 1)
+
 
             if args.dataset == 'hrsc':
                 gt_anno = dsets.load_annotation(cnt)
@@ -182,12 +199,12 @@ class TestModule(object):
                     box = np.asarray([bl, tl, tr, br], np.float32)
                     box = np.int0(box)
                     cv2.drawContours(ori_image, [box], 0, (255, 255, 255), 1)
-
-            cv2.imshow('pr_image', ori_image)
-            k = cv2.waitKey(0) & 0xFF
-            if k == ord('q'):
-                cv2.destroyAllWindows()
-                exit()
+            cv2.imwrite(os.path.join(result_path, img_id + ".jpg"), ori_image)
+            # cv2.imshow('pr_image', ori_image)
+            # k = cv2.waitKey(0) & 0xFF
+            # if k == ord('q'):
+            #     cv2.destroyAllWindows()
+            #     exit()
             #"""
 
         total_time = total_time[1:]
