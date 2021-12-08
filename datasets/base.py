@@ -431,6 +431,126 @@ class BaseDataset(data.Dataset):
                }
         return ret
 
+    def generate_ground_truth_roadmarking(self, image, annotation):
+        image = np.asarray(np.clip(image, a_min=0., a_max=255.), np.float32)  # 强度限制至0~255
+        image = self.image_distort(np.asarray(image, np.float32))             # 强度纠正，包括：增强对比度、增强亮度、去躁
+        image = np.asarray(np.clip(image, a_min=0., a_max=255.), np.float32)
+        # ###################################### view Images #######################################
+        #image_source = image.copy()
+        # ##########################################################################################
+        image = np.transpose(image / 255. - 0.5, (2, 0, 1))                   # 将读入的BGR通道转为RGB通道
+
+        image_h = self.input_h // self.down_ratio                             # 图像降采样，向下取整
+        image_w = self.input_w // self.down_ratio
+
+        hm = np.zeros((self.num_classes, image_h, image_w), dtype=np.float32) # heat map的尺寸：
+        wh = np.zeros((self.max_objs, 10), dtype=np.float32)                  # oriented bounding box的回归参数矩阵： maxobjects × 10 （每个bounding box对应10个参数）
+        ## add
+        cls_theta = np.zeros((self.max_objs, 1), dtype=np.float32)            # rotated box 与 horizontal box的分类分支，尺寸为max objects × 1
+        ## add end
+        ## add forward direction mixiaoxin
+        forward = np.zeros((self.max_objs, 1), dtype=np.float32)              # forward 方向的分类分支，尺寸为max objects × 1，朝向v轴正方向为1，否则为0
+        ## add end
+        reg = np.zeros((self.max_objs, 2), dtype=np.float32)                  # center point浮点数回归参数： max-objs × 2 （2表示x 或者 y）
+        ind = np.zeros((self.max_objs), dtype=np.int64)                       # ind为box的索引id，数量为500个， TODO： 后期这个参数是不是可以改小一点呢？会对整体效果有什么影响呢？
+        reg_mask = np.zeros((self.max_objs), dtype=np.uint8)                  # reg_mask 是什么呢？ 尺寸为500的无符号整数 ？？？
+        num_objs = min(annotation['rect'].shape[0], self.max_objs)
+        # ###################################### view Images #######################################
+        # print('image: ', image.shape)
+        # copy_image1 = cv2.resize(image_source, (image_w, image_h))
+        # copy_image2 = copy_image1.copy()
+        # ##########################################################################################
+        for k in range(num_objs):
+            rect = annotation['rect'][k, :]
+            # TODO： reorgonize the center and bbox annotation accoring to the new rect style by mixiaoxin
+            pts_4 = rect
+            #cen_x, cen_y, bbox_w, bbox_h, theta = rect
+            # print(theta)
+            bbox_w = np.sqrt(np.sum(np.square(np.asarray(pts_4[0, :] - pts_4[1, :], np.float32))))
+            bbox_h = np.sqrt(np.sum(np.square(np.asarray(pts_4[0, :] - pts_4[3, :], np.float32))))
+            cen_x, cen_y = pts_4[0, :] * 0.5 + pts_4[2, :] * 0.5
+            radius = gaussian_radius((math.ceil(bbox_h), math.ceil(bbox_w)))
+            radius = max(0, int(radius))
+            ct = np.asarray([cen_x, cen_y], dtype=np.float32)
+            ct_int = ct.astype(np.int32)
+            draw_umich_gaussian(hm[annotation['cat'][k]], ct_int, radius)
+            ind[k] = ct_int[1] * image_w + ct_int[0]
+            reg[k] = ct - ct_int  # offset的浮点
+            reg_mask[k] = 1
+            # generate wh ground_truth
+            bl = pts_4[0,:]
+            tl = pts_4[1,:]
+            tr = pts_4[2,:]
+            br = pts_4[3,:]
+
+            tt = (np.asarray(tl,np.float32)+np.asarray(tr,np.float32))/2
+            rr = (np.asarray(tr,np.float32)+np.asarray(br,np.float32))/2
+            bb = (np.asarray(bl,np.float32)+np.asarray(br,np.float32))/2
+            ll = (np.asarray(tl,np.float32)+np.asarray(bl,np.float32))/2
+            tt, rr, bb, ll = self.reorder_pts(tt, rr, bb, ll)
+
+            # rotational channel
+            wh[k, 0:2] = tt - ct
+            wh[k, 2:4] = rr - ct
+            wh[k, 4:6] = bb - ct
+            wh[k, 6:8] = ll - ct
+            #####################################################################################
+            # # draw
+            # cv2.line(copy_image1, (int(cen_x), int(cen_y)), (int(tt[0]), int(tt[1])), (0, 0, 255), 1, 1)
+            # cv2.line(copy_image1, (int(cen_x), int(cen_y)), (int(rr[0]), int(rr[1])), (255, 0, 255), 1, 1)
+            # cv2.line(copy_image1, (int(cen_x), int(cen_y)), (int(bb[0]), int(bb[1])), (0, 255, 255), 1, 1)
+            # cv2.line(copy_image1, (int(cen_x), int(cen_y)), (int(ll[0]), int(ll[1])), (255, 0, 0), 1, 1)
+            ####################################################################################
+            # horizontal channel
+            w_hbbox, h_hbbox = self.cal_bbox_wh(pts_4)
+            wh[k, 8:10] = 1. * w_hbbox, 1. * h_hbbox
+            #####################################################################################
+            # # draw
+            # cv2.line(copy_image2, (int(cen_x), int(cen_y)), (int(cen_x), int(cen_y-wh[k, 9]/2)), (0, 0, 255), 1, 1)
+            # cv2.line(copy_image2, (int(cen_x), int(cen_y)), (int(cen_x+wh[k, 8]/2), int(cen_y)), (255, 0, 255), 1, 1)
+            # cv2.line(copy_image2, (int(cen_x), int(cen_y)), (int(cen_x), int(cen_y+wh[k, 9]/2)), (0, 255, 255), 1, 1)
+            # cv2.line(copy_image2, (int(cen_x), int(cen_y)), (int(cen_x-wh[k, 8]/2), int(cen_y)), (255, 0, 0), 1, 1)
+            #####################################################################################
+            # v0
+            # if abs(theta)>3 and abs(theta)<90-3:
+            #     cls_theta[k, 0] = 1
+            # v1
+            jaccard_score = ex_box_jaccard(pts_4.copy(), self.cal_bbox_pts(pts_4).copy())
+            if jaccard_score<0.95:
+                cls_theta[k, 0] = 1
+
+            forward_symbol = pts_4[0,1] - pts_4[2,1]   # v 轴，height方向
+            if forward_symbol > 0:
+                forward[k, 0] = 1
+            ## TODO: 是否要在这里增加线状地物的方向监督为2呢？这些类别不具有正方向的特性，还是在计算预测结果的时候计算呢？
+            if annotation['cat'][k] == 'Forbidden' or annotation['cat'][k] == 'Diamond' or annotation['cat'][k] == 'Dashed_lane' \
+                or annotation['cat'][k] == 'Zebra_crossing' or annotation['cat'][k] == 'Stop_lane':
+                forward[k, 0] = 2
+
+        # ###################################### view Images #####################################
+        # hm_show = np.uint8(cv2.applyColorMap(np.uint8(hm[0, :, :] * 255), cv2.COLORMAP_JET))
+        # copy_image = cv2.addWeighted(np.uint8(copy_image2), 0.4, hm_show, 0.8, 0)
+        #     if jaccard_score>0.95:
+        #         print(theta, jaccard_score, cls_theta[k, 0])
+        #         cv2.imshow('img1', cv2.resize(np.uint8(copy_image1), (image_w*4, image_h*4)))
+        #         cv2.imshow('img2', cv2.resize(np.uint8(copy_image2), (image_w*4, image_h*4)))
+        #         key = cv2.waitKey(0)&0xFF
+        #         if key==ord('q'):
+        #             cv2.destroyAllWindows()
+        #             exit()
+        # #########################################################################################
+
+        ret = {'input': image,
+               'hm': hm,
+               'reg_mask': reg_mask,
+               'ind': ind,
+               'wh': wh,
+               'reg': reg,
+               'cls_theta':cls_theta,
+               'forward':forward,
+               }
+        return ret
+
     def __getitem__(self, index):
         image = self.load_image(index)
         image_h, image_w, c = image.shape
